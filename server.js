@@ -1,7 +1,6 @@
 const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
-const https = require('https');
 const Anthropic = require('@anthropic-ai/sdk').default;
 
 const app = express();
@@ -43,12 +42,12 @@ app.get('/health', (req, res) => {
 });
 
 // ============================================
-// PAYMENT ENDPOINTS
+// PAYMENT ENDPOINTS (MOCK VERSION - NO RAZORPAY)
 // ============================================
 
 /**
  * POST /api/payments/create-order
- * Creates a Razorpay order
+ * MOCK: Returns fake order without calling Razorpay
  */
 app.post('/api/payments/create-order', (req, res) => {
   try {
@@ -58,95 +57,28 @@ app.post('/api/payments/create-order', (req, res) => {
 
     // Validate
     if (!amount || !planId || !userEmail || !userId) {
-      console.error('❌ Missing fields:', { amount, planId, userEmail, userId });
+      console.error('❌ Missing fields');
       return res.status(400).json({
         error: 'Missing required fields: amount, planId, userEmail, userId',
       });
     }
 
-    if (!RAZORPAY_KEY_ID || !RAZORPAY_KEY_SECRET) {
-      console.error('❌ Razorpay credentials missing');
-      return res.status(500).json({
-        error: 'Razorpay not configured',
-      });
-    }
+    // MOCK: Generate fake order ID
+    const mockOrderId = `order_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
-    // Create Razorpay order
-    const auth = Buffer.from(`${RAZORPAY_KEY_ID}:${RAZORPAY_KEY_SECRET}`).toString('base64');
-    
-    const orderData = JSON.stringify({
+    console.log('✅ Mock order created:', mockOrderId);
+
+    return res.json({
+      success: true,
+      orderId: mockOrderId,
       amount: amount,
       currency: 'INR',
-      receipt: `order_${userId}_${Date.now()}`,
       notes: {
         userId,
         planId,
         trialDays,
-        userEmail,
       },
     });
-
-    console.log('📋 Creating order with:', orderData);
-
-    const options = {
-      hostname: 'api.razorpay.com',
-      port: 443,
-      path: '/v1/orders',
-      method: 'POST',
-      headers: {
-        'Authorization': `Basic ${auth}`,
-        'Content-Type': 'application/json',
-        'Content-Length': orderData.length,
-      },
-    };
-
-    const httpsReq = https.request(options, (httpsRes) => {
-      let data = '';
-
-      httpsRes.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      httpsRes.on('end', () => {
-        try {
-          const order = JSON.parse(data);
-
-          if (httpsRes.statusCode === 200) {
-            console.log('✅ Order created:', order.id);
-            return res.json({
-              success: true,
-              orderId: order.id,
-              amount: order.amount,
-              currency: order.currency,
-            });
-          } else {
-            console.error('❌ Razorpay error:', order);
-            return res.status(httpsRes.statusCode).json({
-              error: 'Failed to create order',
-              details: order,
-            });
-          }
-        } catch (parseErr) {
-          console.error('❌ Parse error:', parseErr, 'Data:', data);
-          return res.status(500).json({ 
-            error: 'Parse error',
-            message: parseErr.message,
-          });
-        }
-      });
-    });
-
-    httpsReq.on('error', (error) => {
-      console.error('❌ HTTPS error:', error);
-      return res.status(500).json({
-        error: 'Failed to create order',
-        message: error.message,
-      });
-    });
-
-    httpsReq.write(orderData);
-    httpsReq.end();
-
   } catch (error) {
     console.error('❌ Error in /api/payments/create-order:', error);
     res.status(500).json({
@@ -158,7 +90,7 @@ app.post('/api/payments/create-order', (req, res) => {
 
 /**
  * POST /api/payments/verify-signature
- * Verifies payment signature
+ * MOCK: Always verifies successfully
  */
 app.post('/api/payments/verify-signature', (req, res) => {
   try {
@@ -172,30 +104,17 @@ app.post('/api/payments/verify-signature', (req, res) => {
       });
     }
 
-    // Verify signature
-    const signatureBody = `${orderId}|${paymentId}`;
-    const expectedSignature = crypto
-      .createHmac('sha256', RAZORPAY_KEY_SECRET)
-      .update(signatureBody)
-      .digest('hex');
-
-    if (expectedSignature !== signature) {
-      console.error('❌ Signature mismatch');
-      return res.status(401).json({
-        error: 'Invalid signature',
-      });
-    }
-
-    console.log('✅ Signature verified');
+    console.log('✅ Signature verified (MOCK)');
 
     const premiumUntil = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
-    res.json({
+    return res.json({
       success: true,
       message: 'Payment verified',
       premiumUntil: premiumUntil.toISOString(),
       orderId,
       paymentId,
+      userId,
     });
   } catch (error) {
     console.error('❌ Error in /api/payments/verify-signature:', error);
@@ -208,6 +127,7 @@ app.post('/api/payments/verify-signature', (req, res) => {
 
 /**
  * POST /api/payments/cancel-subscription
+ * MOCK: Always cancels successfully
  */
 app.post('/api/payments/cancel-subscription', (req, res) => {
   try {
@@ -221,7 +141,9 @@ app.post('/api/payments/cancel-subscription', (req, res) => {
       });
     }
 
-    res.json({
+    console.log('✅ Subscription cancelled (MOCK)');
+
+    return res.json({
       success: true,
       message: 'Subscription cancelled',
       userId,
@@ -300,4 +222,5 @@ app.listen(PORT, () => {
   console.log(`  - Anthropic API: ${process.env.ANTHROPIC_API_KEY ? '✅' : '❌'}`);
   console.log(`  - Razorpay Key ID: ${RAZORPAY_KEY_ID ? '✅' : '❌'}`);
   console.log(`  - Razorpay Key Secret: ${RAZORPAY_KEY_SECRET ? '✅' : '❌'}`);
+  console.log(`\n📝 NOTE: Payment endpoints are using MOCK responses (no real Razorpay calls)`);
 });
