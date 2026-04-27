@@ -16,10 +16,6 @@ const client = new Anthropic({
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID || '';
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET || '';
 
-// Supabase info
-const SUPABASE_URL = process.env.SUPABASE_URL || '';
-const SUPABASE_KEY = process.env.SUPABASE_KEY || '';
-
 app.use(cors());
 app.use(express.json());
 
@@ -54,7 +50,7 @@ app.get('/health', (req, res) => {
  * POST /api/payments/create-order
  * Creates a Razorpay order
  */
-app.post('/api/payments/create-order', async (req, res) => {
+app.post('/api/payments/create-order', (req, res) => {
   try {
     console.log('📍 /api/payments/create-order called');
     
@@ -92,63 +88,65 @@ app.post('/api/payments/create-order', async (req, res) => {
 
     console.log('📋 Creating order with:', orderData);
 
-    return new Promise((resolve, reject) => {
-      const options = {
-        hostname: 'api.razorpay.com',
-        port: 443,
-        path: '/v1/orders',
-        method: 'POST',
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json',
-          'Content-Length': orderData.length,
-        },
-      };
+    const options = {
+      hostname: 'api.razorpay.com',
+      port: 443,
+      path: '/v1/orders',
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+        'Content-Length': orderData.length,
+      },
+    };
 
-      const httpsReq = https.request(options, (httpsRes) => {
-        let data = '';
+    const httpsReq = https.request(options, (httpsRes) => {
+      let data = '';
 
-        httpsRes.on('data', (chunk) => {
-          data += chunk;
-        });
+      httpsRes.on('data', (chunk) => {
+        data += chunk;
+      });
 
-        httpsRes.on('end', () => {
-          try {
-            const order = JSON.parse(data);
+      httpsRes.on('end', () => {
+        try {
+          const order = JSON.parse(data);
 
-            if (httpsRes.statusCode === 200) {
-              console.log('✅ Order created:', order.id);
-              resolve(res.json({
-                success: true,
-                orderId: order.id,
-                amount: order.amount,
-                currency: order.currency,
-              }));
-            } else {
-              console.error('❌ Razorpay error:', order);
-              resolve(res.status(httpsRes.statusCode).json({
-                error: 'Failed to create order',
-                details: order,
-              }));
-            }
-          } catch (e) {
-            console.error('❌ Parse error:', e);
-            resolve(res.status(500).json({ error: 'Parse error' }));
+          if (httpsRes.statusCode === 200) {
+            console.log('✅ Order created:', order.id);
+            return res.json({
+              success: true,
+              orderId: order.id,
+              amount: order.amount,
+              currency: order.currency,
+            });
+          } else {
+            console.error('❌ Razorpay error:', order);
+            return res.status(httpsRes.statusCode).json({
+              error: 'Failed to create order',
+              details: order,
+            });
           }
-        });
+        } catch (parseErr) {
+          console.error('❌ Parse error:', parseErr, 'Data:', data);
+          return res.status(500).json({ 
+            error: 'Parse error',
+            message: parseErr.message,
+          });
+        }
       });
-
-      httpsReq.on('error', (error) => {
-        console.error('❌ HTTPS error:', error);
-        resolve(res.status(500).json({
-          error: 'Failed to create order',
-          message: error.message,
-        }));
-      });
-
-      httpsReq.write(orderData);
-      httpsReq.end();
     });
+
+    httpsReq.on('error', (error) => {
+      console.error('❌ HTTPS error:', error);
+      return res.status(500).json({
+        error: 'Failed to create order',
+        message: error.message,
+      });
+    });
+
+    httpsReq.write(orderData);
+    httpsReq.end();
+
   } catch (error) {
     console.error('❌ Error in /api/payments/create-order:', error);
     res.status(500).json({
@@ -162,7 +160,7 @@ app.post('/api/payments/create-order', async (req, res) => {
  * POST /api/payments/verify-signature
  * Verifies payment signature
  */
-app.post('/api/payments/verify-signature', async (req, res) => {
+app.post('/api/payments/verify-signature', (req, res) => {
   try {
     console.log('📍 /api/payments/verify-signature called');
 
@@ -190,8 +188,6 @@ app.post('/api/payments/verify-signature', async (req, res) => {
 
     console.log('✅ Signature verified');
 
-    // TODO: Update Supabase with premium status
-    // For now, just return success
     const premiumUntil = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
 
     res.json({
@@ -213,7 +209,7 @@ app.post('/api/payments/verify-signature', async (req, res) => {
 /**
  * POST /api/payments/cancel-subscription
  */
-app.post('/api/payments/cancel-subscription', async (req, res) => {
+app.post('/api/payments/cancel-subscription', (req, res) => {
   try {
     console.log('📍 /api/payments/cancel-subscription called');
 
@@ -225,8 +221,6 @@ app.post('/api/payments/cancel-subscription', async (req, res) => {
       });
     }
 
-    // TODO: Update Supabase to remove premium
-    
     res.json({
       success: true,
       message: 'Subscription cancelled',
@@ -305,5 +299,5 @@ app.listen(PORT, () => {
   console.log(`Environment:`);
   console.log(`  - Anthropic API: ${process.env.ANTHROPIC_API_KEY ? '✅' : '❌'}`);
   console.log(`  - Razorpay Key ID: ${RAZORPAY_KEY_ID ? '✅' : '❌'}`);
-  console.log(`  - Supabase URL: ${SUPABASE_URL ? '✅' : '❌'}`);
+  console.log(`  - Razorpay Key Secret: ${RAZORPAY_KEY_SECRET ? '✅' : '❌'}`);
 });
