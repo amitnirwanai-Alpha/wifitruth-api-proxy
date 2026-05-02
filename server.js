@@ -1,10 +1,6 @@
-// Set timeout for all requests to 5 minutes
-app.use((req, res, next) => {
-  req.setTimeout(300000); // 5 minutes
-  next();
-});
-
-
+// ============================================
+// 1. IMPORTS (MUST BE FIRST!)
+// ============================================
 const express = require('express');
 const cors = require('cors');
 const Razorpay = require('razorpay');
@@ -12,11 +8,14 @@ const Speedtest = require('speedtest-net');
 const crypto = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 
+// ============================================
+// 2. CREATE APP (BEFORE USING IT!)
+// ============================================
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ============================================
-// ENVIRONMENT VARIABLES
+// 3. ENVIRONMENT VARIABLES
 // ============================================
 const RAZORPAY_KEY_ID = process.env.RAZORPAY_KEY_ID;
 const RAZORPAY_KEY_SECRET = process.env.RAZORPAY_KEY_SECRET;
@@ -35,7 +34,7 @@ if (!SUPABASE_URL || !SUPABASE_KEY) {
 }
 
 // ============================================
-// INITIALIZE CLIENTS
+// 4. INITIALIZE CLIENTS
 // ============================================
 const razorpay = new Razorpay({
   key_id: RAZORPAY_KEY_ID,
@@ -45,19 +44,28 @@ const razorpay = new Razorpay({
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ============================================
-// MIDDLEWARE
+// 5. MIDDLEWARE (AFTER APP IS CREATED!)
 // ============================================
 app.use(cors());
 app.use(express.json());
 
+// Global timeout for all requests - 5 minutes
+app.use((req, res, next) => {
+  req.socket.setTimeout(300000); // 5 minutes
+  next();
+});
+
+// Request logging
 app.use((req, res, next) => {
   console.log(`📍 ${req.method} ${req.path}`);
   next();
 });
 
 // ============================================
-// HEALTH CHECK
+// 6. ROUTES
 // ============================================
+
+// ── Health Check ──
 app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok',
@@ -67,22 +75,18 @@ app.get('/health', (req, res) => {
   });
 });
 
-// ============================================
-// 0. OOKLA SPEED TEST (NEW!)
-
-// ============================================
+// ── OOKLA Speed Test ──
 app.post('/api/speed-test', async (req, res) => {
   try {
     console.log('🚀 Starting OOKLA speed test...');
     
-    // Set timeouts for this request
+    // Set timeout for this specific request
     req.socket.setTimeout(300000);  // 5 minutes
-    res.setTimeout(300000);          // 5 minutes
 
     const speedtest = new Speedtest({
       token: 'YXNkZmFzZGZhc2RmYXNkZmFzZGY=',
       verbose: false,
-      timeout: 180000,  // ← INCREASED TO 3 MINUTES
+      timeout: 180000,  // 3 minutes for speedtest-net library
     });
 
     const startTime = Date.now();
@@ -124,9 +128,7 @@ app.post('/api/speed-test', async (req, res) => {
   }
 });
 
-// ============================================
-// 1. CREATE ORDER (for payment)
-// ============================================
+// ── Create Order (Razorpay) ──
 app.post('/api/payments/create-order', async (req, res) => {
   try {
     const { amount, planId, trialDays, userEmail, userName, userId } = req.body;
@@ -173,9 +175,7 @@ app.post('/api/payments/create-order', async (req, res) => {
   }
 });
 
-// ============================================
-// 2. VERIFY SIGNATURE (payment confirmation)
-// ============================================
+// ── Verify Payment Signature ──
 app.post('/api/payments/verify-signature', async (req, res) => {
   try {
     const { orderId, paymentId, signature, userId } = req.body;
@@ -247,9 +247,7 @@ app.post('/api/payments/verify-signature', async (req, res) => {
   }
 });
 
-// ============================================
-// 3. CANCEL SUBSCRIPTION
-// ============================================
+// ── Cancel Subscription ──
 app.post('/api/payments/cancel-subscription', async (req, res) => {
   try {
     const { userId } = req.body;
@@ -296,9 +294,7 @@ app.post('/api/payments/cancel-subscription', async (req, res) => {
   }
 });
 
-// ============================================
-// 4. DIAGNOSE ENDPOINT
-// ============================================
+// ── Diagnose Endpoint ──
 app.post('/api/diagnose', (req, res) => {
   res.json({
     success: true,
@@ -308,7 +304,7 @@ app.post('/api/diagnose', (req, res) => {
 });
 
 // ============================================
-// ERROR HANDLING
+// 7. ERROR HANDLING (BEFORE LISTEN!)
 // ============================================
 app.use((err, req, res, next) => {
   console.error('🔴 Server error:', err);
@@ -319,7 +315,7 @@ app.use((err, req, res, next) => {
 });
 
 // ============================================
-// START SERVER
+// 8. START SERVER (LAST!)
 // ============================================
 app.listen(PORT, () => {
   console.log(`🚀 WiFiTruth API running on port ${PORT}`);
