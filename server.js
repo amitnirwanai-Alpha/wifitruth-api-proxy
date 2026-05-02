@@ -77,37 +77,79 @@ app.get('/health', (req, res) => {
 
 // ── OOKLA Speed Test ──
 app.post('/api/speed-test', async (req, res) => {
+  const requestStartTime = Date.now();
+  
   try {
-    console.log('🚀 Starting OOKLA speed test...');
+    console.log('🚀 [SPEED-TEST] Starting OOKLA speed test...');
+    console.log('⏰ [SPEED-TEST] Request started at:', new Date().toISOString());
     
     // Set timeout for this specific request
     req.socket.setTimeout(300000);  // 5 minutes
+    console.log('⏱️  [SPEED-TEST] Socket timeout set to 5 minutes');
+
+    // Verify speedtest-net is available
+    if (!Speedtest) {
+      throw new Error('speedtest-net library not loaded');
+    }
+    console.log('✅ [SPEED-TEST] speedtest-net library loaded');
 
     const speedtest = new Speedtest({
       token: 'YXNkZmFzZGZhc2RmYXNkZmFzZGY=',
       verbose: false,
       timeout: 180000,  // 3 minutes for speedtest-net library
     });
+    console.log('✅ [SPEED-TEST] Speedtest instance created');
 
     const startTime = Date.now();
 
-    console.log('📍 Testing ping...');
-    const ping = await speedtest.pingTest();
-    console.log(`✅ Ping: ${ping.toFixed(2)} ms`);
+    // PING TEST
+    console.log('📍 [SPEED-TEST] Starting ping test...');
+    let ping;
+    try {
+      ping = await speedtest.pingTest();
+      console.log(`✅ [SPEED-TEST] Ping complete: ${ping.toFixed(2)} ms`);
+    } catch (pingError) {
+      console.error('❌ [SPEED-TEST] Ping test failed:', pingError.message);
+      throw new Error(`Ping test failed: ${pingError.message}`);
+    }
 
-    console.log('⬇️ Testing download...');
-    const download = await speedtest.downloadTest();
-    console.log(`✅ Download: ${download.toFixed(2)} Mbps`);
+    // DOWNLOAD TEST
+    console.log('⬇️  [SPEED-TEST] Starting download test...');
+    let download;
+    try {
+      download = await speedtest.downloadTest();
+      console.log(`✅ [SPEED-TEST] Download complete: ${download.toFixed(2)} Mbps`);
+    } catch (dlError) {
+      console.error('❌ [SPEED-TEST] Download test failed:', dlError.message);
+      throw new Error(`Download test failed: ${dlError.message}`);
+    }
 
-    console.log('⬆️ Testing upload...');
-    const upload = await speedtest.uploadTest();
-    console.log(`✅ Upload: ${upload.toFixed(2)} Mbps`);
+    // UPLOAD TEST
+    console.log('⬆️  [SPEED-TEST] Starting upload test...');
+    let upload;
+    try {
+      upload = await speedtest.uploadTest();
+      console.log(`✅ [SPEED-TEST] Upload complete: ${upload.toFixed(2)} Mbps`);
+    } catch (ulError) {
+      console.error('❌ [SPEED-TEST] Upload test failed:', ulError.message);
+      throw new Error(`Upload test failed: ${ulError.message}`);
+    }
 
     const jitter = Math.max(ping * 0.15, 1);
     const packetLoss = ping > 150 ? (ping - 150) * 0.2 : 0;
     const duration = Math.round((Date.now() - startTime) / 1000);
+    const totalRequestTime = Math.round((Date.now() - requestStartTime) / 1000);
 
-    console.log(`✅ OOKLA test complete in ${duration}s`);
+    console.log('═══════════════════════════════════════════');
+    console.log('✅ [SPEED-TEST] OOKLA TEST COMPLETE!');
+    console.log('═══════════════════════════════════════════');
+    console.log(`  Download: ${download.toFixed(2)} Mbps`);
+    console.log(`  Upload: ${upload.toFixed(2)} Mbps`);
+    console.log(`  Ping: ${ping.toFixed(2)} ms`);
+    console.log(`  Jitter: ${jitter.toFixed(2)} ms`);
+    console.log(`  Test duration: ${duration}s`);
+    console.log(`  Total request time: ${totalRequestTime}s`);
+    console.log('═══════════════════════════════════════════');
 
     res.json({
       success: true,
@@ -117,13 +159,28 @@ app.post('/api/speed-test', async (req, res) => {
       jitter: Math.round(jitter * 100) / 100,
       packetLoss: Math.round(packetLoss * 100) / 100,
       duration,
+      totalRequestTime,
       source: 'OOKLA Speedtest',
+      timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('❌ OOKLA test failed:', error.message);
+    const failureTime = Math.round((Date.now() - requestStartTime) / 1000);
+    
+    console.error('═══════════════════════════════════════════');
+    console.error('❌ [SPEED-TEST] OOKLA TEST FAILED!');
+    console.error('═══════════════════════════════════════════');
+    console.error(`  Error: ${error.message}`);
+    console.error(`  Error type: ${error.constructor.name}`);
+    console.error(`  Failed after: ${failureTime}s`);
+    console.error(`  Stack: ${error.stack}`);
+    console.error('═══════════════════════════════════════════');
+
     res.status(500).json({
       success: false,
       error: error.message || 'Speed test failed',
+      failureTime,
+      timestamp: new Date().toISOString(),
+      errorType: error.constructor.name,
     });
   }
 });
