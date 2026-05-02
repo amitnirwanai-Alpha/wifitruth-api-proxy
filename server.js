@@ -4,7 +4,6 @@ const app = express();
 // Set timeout for all requests to 5 minutes
 app.use((req, res, next) => {
   req.setTimeout(300000); // 5 minutes
-  res.setTimeout(300000);
   next();
 });
 
